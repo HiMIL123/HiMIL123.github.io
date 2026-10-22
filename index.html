@@ -1,27 +1,577 @@
-<textarea id="code" rows="6" cols="60" placeholder="Paste character code"></textarea><br>
-<button id="go">Convert</button>
-<pre id="out"></pre>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JJS Code Decoder</title>
+<meta name="description" content="Turn a Jujutsu Shenanigans character code into readable JSON. Runs entirely in your browser.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%238b7bff'/%3E%3Cstop offset='1' stop-color='%2338d5ff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Ctext x='32' y='42' font-size='30' font-family='monospace' font-weight='700' text-anchor='middle' fill='white'%3E%7B%7D%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#07080d; --card:rgba(255,255,255,.04); --card-b:rgba(255,255,255,.09);
+  --text:#e8eaf3; --muted:#8b90a7; --accent:#8b7bff; --accent2:#38d5ff;
+  --ok:#3ddc97; --warn:#ffb454; --err:#ff6b81;
+  --key:#9cc2ff; --str:#a5e8b4; --num:#ffc98b; --bool:#d6a4ff; --null:#8b90a7;
+  --code-bg:rgba(0,0,0,.34); --hover:rgba(255,255,255,.07);
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme:light){
+  :root{
+    --bg:#f4f5fa; --card:rgba(255,255,255,.78); --card-b:rgba(20,24,50,.1);
+    --text:#161a2e; --muted:#626883; --accent:#6a56f0; --accent2:#0aa6d6;
+    --ok:#119e63; --warn:#b86b00; --err:#d6334f;
+    --key:#2457c5; --str:#1a7f43; --num:#b45309; --bool:#7c3aed; --null:#6b7280;
+    --code-bg:rgba(20,24,50,.045); --hover:rgba(20,24,50,.06);
+    color-scheme:light;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  font-family:var(--sans); color:var(--text); min-height:100vh;
+  background:
+    radial-gradient(900px 520px at 8% -10%, color-mix(in srgb,var(--accent) 24%,transparent), transparent 62%),
+    radial-gradient(800px 520px at 100% 0%, color-mix(in srgb,var(--accent2) 17%,transparent), transparent 58%),
+    var(--bg);
+  background-attachment:fixed;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1280px;margin:0 auto;padding:36px 20px 40px}
 
-<script>
-function decodeCharacterCode(code) {
-  // Clean whitespace and convert URL-safe base64 to standard base64
-  let b64 = code.trim().replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/");
-  while (b64.length % 4) b64 += "=";
+/* header */
+header{display:flex;align-items:center;gap:16px;margin-bottom:28px}
+.logo{
+  width:46px;height:46px;border-radius:14px;flex:none;display:grid;place-items:center;
+  font:700 20px var(--mono);color:#fff;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  box-shadow:0 8px 30px color-mix(in srgb,var(--accent) 45%,transparent);
+}
+h1{font-size:clamp(20px,3vw,26px);margin:0;letter-spacing:-.02em;font-weight:650}
+.sub{margin:3px 0 0;color:var(--muted);font-size:14px}
 
-  // atob gives a binary string; decode it as UTF-8 so non-ASCII text survives
-  const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-  const text = new TextDecoder("utf-8").decode(bytes);
+/* layout */
+.grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:18px;align-items:stretch}
+@media (max-width:920px){.grid{grid-template-columns:1fr}}
+.card{
+  background:var(--card);border:1px solid var(--card-b);border-radius:18px;
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  display:flex;flex-direction:column;min-width:0;
+  box-shadow:0 20px 60px -30px rgba(0,0,0,.55);
+}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px 0;flex-wrap:wrap}
+.card-head h2{margin:0;font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.actions{display:flex;gap:6px;flex-wrap:wrap}
 
-  return JSON.parse(text);
+/* buttons */
+.btn{
+  font:500 13px var(--sans);color:var(--text);background:transparent;cursor:pointer;
+  border:1px solid var(--card-b);border-radius:10px;padding:7px 12px;
+  transition:background .15s,border-color .15s,transform .05s;
+}
+.btn:hover{background:var(--hover)}
+.btn:active{transform:translateY(1px)}
+.btn:focus-visible,.seg button:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn.primary{border-color:transparent;color:#fff;background:linear-gradient(135deg,var(--accent),color-mix(in srgb,var(--accent) 55%,var(--accent2)))}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn[disabled]{opacity:.4;pointer-events:none}
+
+/* input */
+.input-body{padding:12px 16px 16px;display:flex;flex-direction:column;gap:12px;flex:1}
+textarea{
+  flex:1;min-height:300px;width:100%;resize:vertical;
+  background:var(--code-bg);color:var(--text);border:1px solid var(--card-b);border-radius:12px;
+  padding:14px;font:400 12.5px/1.6 var(--mono);word-break:break-all;
+}
+textarea::placeholder{color:var(--muted)}
+textarea.drag{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--code-bg))}
+
+/* pipeline */
+.pipeline{min-height:34px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.chip{
+  padding:4px 10px;border-radius:999px;font:500 12px var(--mono);
+  border:1px solid color-mix(in srgb,var(--ok) 40%,transparent);
+  color:var(--ok);background:color-mix(in srgb,var(--ok) 10%,transparent);
+}
+.chip.size{border-color:var(--card-b);color:var(--muted);background:transparent}
+.arrow{opacity:.5}
+.msg{display:flex;gap:8px;align-items:flex-start;line-height:1.5;padding:9px 12px;border-radius:10px;font-size:13px;width:100%}
+.msg.err{color:var(--err);background:color-mix(in srgb,var(--err) 10%,transparent);border:1px solid color-mix(in srgb,var(--err) 30%,transparent)}
+.msg.warn{color:var(--warn);background:color-mix(in srgb,var(--warn) 10%,transparent);border:1px solid color-mix(in srgb,var(--warn) 30%,transparent)}
+
+/* output */
+.out-top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px 0;flex-wrap:wrap}
+.seg{display:inline-flex;padding:3px;gap:2px;border:1px solid var(--card-b);border-radius:11px;background:var(--code-bg)}
+.seg button{
+  font:500 12.5px var(--sans);color:var(--muted);background:none;border:0;cursor:pointer;
+  padding:5px 12px;border-radius:8px;transition:color .15s,background .15s;
+}
+.seg button:hover{color:var(--text)}
+.seg button[aria-pressed="true"]{color:var(--text);background:var(--hover);box-shadow:inset 0 0 0 1px var(--card-b)}
+.toolbar{display:flex;align-items:center;gap:14px;padding:12px 16px 0;flex-wrap:wrap;color:var(--muted);font-size:13px}
+.switch{display:inline-flex;align-items:center;gap:9px;cursor:pointer;user-select:none;color:var(--text)}
+.switch input{position:absolute;opacity:0;pointer-events:none}
+.track{width:34px;height:20px;border-radius:999px;background:var(--card-b);position:relative;transition:background .2s;flex:none}
+.track::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.switch input:checked + .track{background:linear-gradient(135deg,var(--accent),var(--accent2))}
+.switch input:checked + .track::after{transform:translateX(14px)}
+.switch input:focus-visible + .track{outline:2px solid var(--accent);outline-offset:2px}
+.spacer{flex:1}
+.viewer{
+  margin:12px 16px 0;flex:1;min-height:420px;max-height:min(72vh,760px);overflow:auto;
+  background:var(--code-bg);border:1px solid var(--card-b);border-radius:12px;padding:14px 16px;
+  font:400 12.5px/1.65 var(--mono);
+}
+.viewer pre{margin:0;white-space:pre-wrap;word-break:break-word;font:inherit}
+.k{color:var(--key)} .s{color:var(--str)} .n{color:var(--num)} .b{color:var(--bool)} .z{color:var(--null)}
+.status{padding:10px 18px 14px;font-size:12px;color:var(--muted);min-height:38px}
+.empty{height:100%;min-height:380px;display:grid;place-content:center;justify-items:center;gap:10px;color:var(--muted);text-align:center;font:400 14px var(--sans)}
+.empty .glyph{font:600 30px var(--mono);opacity:.35}
+
+/* tree */
+.tree .row,.tree summary{padding:1px 0}
+.tree summary{cursor:pointer;list-style:none;display:flex;align-items:baseline;gap:6px;border-radius:6px}
+.tree summary::-webkit-details-marker{display:none}
+.tree summary::before{content:"▸";display:inline-block;width:12px;color:var(--muted);transition:transform .12s;flex:none;font-size:10px}
+.tree details[open] > summary::before{transform:rotate(90deg)}
+.tree summary:hover{background:var(--hover)}
+.tree .kids{margin-left:5px;padding-left:14px;border-left:1px solid var(--card-b)}
+.tree .row{padding-left:18px;word-break:break-word;white-space:pre-wrap}
+.tree .idx{color:var(--muted)}
+.tree .meta{color:var(--muted);font-size:11.5px}
+.tree .p{color:var(--muted)}
+.badge{
+  font:500 10.5px var(--sans);padding:1px 7px;border-radius:999px;letter-spacing:.02em;
+  color:var(--accent2);background:color-mix(in srgb,var(--accent2) 12%,transparent);
+  border:1px solid color-mix(in srgb,var(--accent2) 30%,transparent);
 }
 
-document.getElementById("go").onclick = () => {
-  const out = document.getElementById("out");
-  try {
-    const obj = decodeCharacterCode(document.getElementById("code").value);
-    out.textContent = JSON.stringify(obj, null, 2); // pretty-printed JSON
-  } catch (e) {
-    out.textContent = "Could not decode: " + e.message;
+footer{margin-top:22px;text-align:center;color:var(--muted);font-size:12.5px}
+.toast{
+  position:fixed;left:50%;bottom:28px;transform:translate(-50%,20px);opacity:0;pointer-events:none;
+  background:var(--text);color:var(--bg);padding:9px 16px;border-radius:999px;font-size:13px;font-weight:500;
+  transition:opacity .2s,transform .2s;
+}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo" aria-hidden="true">{ }</div>
+    <div>
+      <h1>JJS Code Decoder</h1>
+      <p class="sub">Paste a Jujutsu Shenanigans character code and get readable JSON.</p>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section class="card" aria-labelledby="in-h">
+      <div class="card-head">
+        <h2 id="in-h">Character code</h2>
+        <div class="actions">
+          <button class="btn" id="paste" type="button">Paste</button>
+          <button class="btn" id="example" type="button">Example</button>
+          <button class="btn" id="clear" type="button">Clear</button>
+        </div>
+      </div>
+      <div class="input-body">
+        <textarea id="code" spellcheck="false" autocomplete="off" autocapitalize="off"
+          placeholder="Paste your code here, or drop a .txt file…"></textarea>
+        <div class="pipeline" id="pipeline" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="out-h">
+      <div class="out-top">
+        <h2 id="out-h" class="sr" style="position:absolute;left:-9999px">Decoded output</h2>
+        <div class="seg" role="group" aria-label="Output view">
+          <button type="button" data-view="json" aria-pressed="true">JSON</button>
+          <button type="button" data-view="tree" aria-pressed="false">Tree</button>
+          <button type="button" data-view="raw" aria-pressed="false">Raw</button>
+        </div>
+        <div class="actions">
+          <button class="btn" id="copy" type="button" disabled>Copy</button>
+          <button class="btn primary" id="download" type="button" disabled>Download .json</button>
+        </div>
+      </div>
+      <div class="toolbar">
+        <label class="switch" title="Some fields (like DATA) hold JSON inside a string. Turn this on to unpack them.">
+          <input type="checkbox" id="deep" checked><span class="track"></span><span>Expand nested JSON</span>
+        </label>
+        <span class="spacer"></span>
+        <span id="treeTools" hidden>
+          <button class="btn" id="expand" type="button">Expand all</button>
+          <button class="btn" id="collapse" type="button">Collapse all</button>
+        </span>
+        <div class="seg" role="group" aria-label="Indentation" id="indentSeg">
+          <button type="button" data-indent="2" aria-pressed="true">2</button>
+          <button type="button" data-indent="4" aria-pressed="false">4</button>
+          <button type="button" data-indent="0" aria-pressed="false">Min</button>
+        </div>
+      </div>
+      <div class="viewer" id="viewer" tabindex="0"></div>
+      <div class="status" id="status"></div>
+    </section>
+  </main>
+
+  <footer>Everything runs in your browser. Your codes are never uploaded.</footer>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+/* CORE START — pure logic, no DOM access except loadScript */
+const FZSTD_URLS = [
+  'https://cdn.jsdelivr.net/npm/fzstd@0.1.1/umd/index.js',
+  'https://unpkg.com/fzstd@0.1.1/umd/index.js'
+];
+
+class DecodeError extends Error {
+  constructor(stage, message) { super(message); this.stage = stage; }
+}
+
+function loadScript(url) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = url;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('Failed to load ' + url));
+    document.head.appendChild(s);
+  });
+}
+
+async function ensureFzstd() {
+  if (globalThis.fzstd && globalThis.fzstd.decompress) return globalThis.fzstd;
+  for (const url of FZSTD_URLS) {
+    try {
+      await loadScript(url);
+      if (globalThis.fzstd && globalThis.fzstd.decompress) return globalThis.fzstd;
+    } catch (_) { /* try the next CDN */ }
   }
+  throw new DecodeError('zstd', "Couldn't load the Zstandard decoder. Check your internet connection and try again.");
+}
+
+function cleanInput(s) {
+  return s.trim().replace(/^["'`]+|["'`]+$/g, '').replace(/\s+/g, '');
+}
+
+function b64ToBytes(s) {
+  s = s.replace(/-/g, '+').replace(/_/g, '/');
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(s)) {
+    throw new DecodeError('base64', "That doesn't look like a valid code. It contains characters that aren't allowed in base64.");
+  }
+  s = s.replace(/=+$/, '');
+  if (s.length % 4 === 1) {
+    throw new DecodeError('base64', 'The code looks cut off. Make sure you copied all of it.');
+  }
+  while (s.length % 4) s += '=';
+  let bin;
+  try { bin = atob(s); }
+  catch (_) { throw new DecodeError('base64', "That doesn't look like a valid code."); }
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+function sniff(b) {
+  if (b.length >= 4 && b[0] === 0x28 && b[1] === 0xB5 && b[2] === 0x2F && b[3] === 0xFD) return 'zstd';
+  if (b.length >= 2 && b[0] === 0x1F && b[1] === 0x8B) return 'gzip';
+  if (b.length >= 2 && b[0] === 0x78 && [0x01, 0x5E, 0x9C, 0xDA].includes(b[1])) return 'zlib';
+  return 'none';
+}
+
+async function streamInflate(bytes, format) {
+  const ds = new DecompressionStream(format);
+  const stream = new Blob([bytes]).stream().pipeThrough(ds);
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+/* Read the decompressed size the zstd frame header declares (null if it doesn't say). */
+function zstdContentSize(b) {
+  const fhd = b[4];
+  if (fhd === undefined) return null;
+  const fcsFlag = fhd >> 6, single = (fhd >> 5) & 1, dictFlag = fhd & 3;
+  const off = 5 + (single ? 0 : 1) + [0, 1, 2, 4][dictFlag];
+  const n = fcsFlag === 0 ? (single ? 1 : 0) : [0, 2, 4, 8][fcsFlag];
+  if (!n || b.length < off + n) return null;
+  let v = 0;
+  for (let i = n - 1; i >= 0; i--) v = v * 256 + b[off + i];
+  return fcsFlag === 1 ? v + 256 : v;
+}
+
+async function inflateZstd(bytes) {
+  let data = null;
+  try { data = await streamInflate(bytes, 'zstd'); } catch (_) { /* not supported natively; use the library */ }
+  if (!data) {
+    const lib = await ensureFzstd();
+    try { data = lib.decompress(bytes); }
+    catch (_) {
+      throw new DecodeError('zstd', "Zstandard data was found but couldn't be decompressed. The code may be damaged or incomplete.");
+    }
+  }
+  const expected = zstdContentSize(bytes);
+  if (data.length === 0 || (expected !== null && data.length !== expected)) {
+    throw new DecodeError('zstd', 'The code looks cut off or damaged' +
+      (expected !== null ? ' (expected ' + expected + ' bytes, got ' + data.length + ').' : '.') +
+      ' Make sure you copied all of it.');
+  }
+  return data;
+}
+
+async function decodeCode(input) {
+  const cleaned = cleanInput(input);
+  if (!cleaned) throw new DecodeError('input', 'Nothing to decode.');
+  const bytes = b64ToBytes(cleaned);
+  const steps = ['Base64'];
+  let data = bytes;
+  const fmt = sniff(bytes);
+  if (fmt === 'zstd') {
+    data = await inflateZstd(bytes); steps.push('Zstandard');
+  } else if (fmt === 'gzip' || fmt === 'zlib') {
+    try { data = await streamInflate(bytes, fmt === 'gzip' ? 'gzip' : 'deflate'); }
+    catch (_) { throw new DecodeError(fmt, 'Compressed data was found but couldn\'t be decompressed. The code may be damaged.'); }
+    steps.push(fmt === 'gzip' ? 'Gzip' : 'Zlib');
+  }
+  const text = new TextDecoder('utf-8').decode(data).replace(/^﻿/, '');
+  let value = null, isJson = false;
+  try { value = JSON.parse(text); isJson = true; steps.push('JSON'); } catch (_) { /* leave as text */ }
+  return { steps, inBytes: bytes.length, outBytes: data.length, text, value, isJson };
+}
+
+/* Unpack strings that contain JSON objects/arrays (e.g. the DATA fields). Non-mutating. */
+function deepParse(v, ctx) {
+  if (typeof v === 'string') {
+    const t = v.trim();
+    if ((t[0] === '{' && t.endsWith('}')) || (t[0] === '[' && t.endsWith(']'))) {
+      try {
+        const p = JSON.parse(t);
+        if (p && typeof p === 'object') {
+          const r = deepParse(p, ctx);
+          ctx.marks.add(r); ctx.count++;
+          return r;
+        }
+      } catch (_) { /* plain string */ }
+    }
+    return v;
+  }
+  if (Array.isArray(v)) return v.map(x => deepParse(x, ctx));
+  if (v && typeof v === 'object') {
+    const o = Object.create(null);
+    for (const k of Object.keys(v)) o[k] = deepParse(v[k], ctx);
+    return o;
+  }
+  return v;
+}
+/* CORE END */
+
+/* ---------- UI ---------- */
+const $ = s => document.querySelector(s);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const state = { result: null, error: null, view: 'json', deep: true, indent: 2, busy: 0 };
+
+const input = $('#code'), viewer = $('#viewer'), pipeline = $('#pipeline'), statusEl = $('#status');
+const copyBtn = $('#copy'), dlBtn = $('#download');
+
+const EXAMPLE = 'KLUv/WCGASUKADZSOyUQyToHwHlh0jfEZ4n1YHXJmUPYEdi9YryDUYOfW64pQQAAAAAILwAtADIA2vlvPvgt8KcACSMpn6/Dd0To+yhKQAsB6Hs6sSZHL1U6P0pv+lLLZRHwIXzXHgE/X5GYLpJyfr9RakXx3mp7U8/w5ndvU2j4PSeGlN5be/DbgFLvrR78ppgkegeI572IZ3qU4fDmu2FErzHj4r2FxHx3bEgpUgAQvre2bVslZJRJfGv8jgxgVsXQMAyzW9V2x9FLlVxmuYJaLwfBLGeRRDJHLQyH3/CZceGI0CXBHG23d8NgCBVy1foc3kEl4zf0xCAAxwvgZyPgXUH8i8DWqzczgYtsuqCQMAFsXKMb8eJDVaLXjtHUYRwAUmyucX85zAYTHjPMv0TNIirG4OIbdJkcugwLyx3ZMqTMh12bXbDgItGdTw==';
+
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const fmtBytes = n => n < 1024 ? n + ' B' : (n / 1024).toFixed(1) + ' KB';
+
+function highlight(json) {
+  return esc(json).replace(
+    /("(?:\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(?:true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+\-]?\d+)?)/g,
+    m => {
+      let c = 'n';
+      if (m[0] === '"') c = /:\s*$/.test(m) ? 'k' : 's';
+      else if (m === 'true' || m === 'false') c = 'b';
+      else if (m === 'null') c = 'z';
+      return '<span class="' + c + '">' + m + '</span>';
+    });
+}
+
+function getView() {
+  const r = state.result;
+  if (!r) return null;
+  if (!r.isJson) return { text: r.text, value: null, ctx: { marks: new WeakSet(), count: 0 } };
+  const ctx = { marks: new WeakSet(), count: 0 };
+  const value = state.deep ? deepParse(r.value, ctx) : r.value;
+  return { value, ctx, text: JSON.stringify(value, null, state.indent) };
+}
+
+function leaf(v) {
+  if (typeof v === 'string') return el('span', 's', JSON.stringify(v));
+  if (typeof v === 'number') return el('span', 'n', String(v));
+  if (typeof v === 'boolean') return el('span', 'b', String(v));
+  return el('span', 'z', 'null');
+}
+
+function keyEl(key, isIdx) {
+  return isIdx ? el('span', 'idx', key) : el('span', 'k', JSON.stringify(key));
+}
+
+function treeNode(key, isIdx, val, marks, depth) {
+  const isObj = val && typeof val === 'object';
+  if (!isObj) {
+    const row = el('div', 'row');
+    if (key !== null) row.append(keyEl(key, isIdx), el('span', 'p', ': '));
+    row.append(leaf(val));
+    return row;
+  }
+  const arr = Array.isArray(val), keys = Object.keys(val);
+  const d = el('details'); d.open = depth < 3;
+  const s = el('summary');
+  if (key !== null) s.append(keyEl(key, isIdx), el('span', 'p', ':'));
+  s.append(el('span', 'p', arr ? '[ ]' : '{ }'));
+  s.append(el('span', 'meta', keys.length + (arr ? (keys.length === 1 ? ' item' : ' items') : (keys.length === 1 ? ' key' : ' keys'))));
+  if (marks.has(val)) s.append(el('span', 'badge', 'unpacked'));
+  d.append(s);
+  const kids = el('div', 'kids');
+  for (const k of keys) kids.append(treeNode(k, arr, val[k], marks, depth + 1));
+  d.append(kids);
+  return d;
+}
+
+function renderPipeline() {
+  pipeline.textContent = '';
+  if (state.error) {
+    pipeline.append(el('div', 'msg err', state.error.message));
+    return;
+  }
+  const r = state.result;
+  if (!r) return;
+  r.steps.forEach((st, i) => {
+    if (i) pipeline.append(el('span', 'arrow', '→'));
+    pipeline.append(el('span', 'chip', st));
+  });
+  pipeline.append(el('span', 'chip size', fmtBytes(r.inBytes) + ' → ' + fmtBytes(r.outBytes)));
+  if (!r.isJson) {
+    const binary = /�/.test(r.text);
+    pipeline.append(el('div', 'msg warn', binary
+      ? "Decoded, but the result isn't JSON and looks like binary data."
+      : "Decoded, but the result isn't JSON. Showing it as plain text."));
+  }
+}
+
+function renderViewer() {
+  const v = getView();
+  const hasOut = !!v;
+  copyBtn.disabled = dlBtn.disabled = !hasOut;
+  viewer.textContent = '';
+  statusEl.textContent = '';
+  $('#treeTools').hidden = !(hasOut && state.view === 'tree');
+  $('#indentSeg').style.visibility = (hasOut && state.view === 'json' && state.result.isJson) ? 'visible' : 'hidden';
+
+  if (!hasOut) {
+    const e = el('div', 'empty');
+    e.append(el('div', 'glyph', '{ }'), el('div', null, state.error ? 'Fix the code on the left to see it here.' : 'Your decoded JSON will show up here.'));
+    viewer.append(e);
+    return;
+  }
+
+  let view = state.view;
+  if (!state.result.isJson && view !== 'raw') view = 'raw';
+  document.querySelectorAll('[data-view]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === view)));
+
+  if (view === 'json') {
+    const pre = el('pre'); pre.innerHTML = highlight(v.text); viewer.append(pre);
+  } else if (view === 'tree') {
+    const t = el('div', 'tree');
+    t.append(treeNode(null, false, v.value, v.ctx.marks, 0));
+    viewer.append(t);
+  } else {
+    const pre = el('pre'); pre.textContent = state.result.text; viewer.append(pre);
+  }
+
+  const r = state.result, parts = [];
+  if (r.isJson) {
+    const val = v.value;
+    if (Array.isArray(val)) parts.push('Array · ' + val.length + (val.length === 1 ? ' item' : ' items'));
+    else if (val && typeof val === 'object') parts.push('Object · ' + Object.keys(val).length + ' keys');
+    else parts.push('Value');
+    if (state.deep && v.ctx.count) parts.push(v.ctx.count + ' nested JSON ' + (v.ctx.count === 1 ? 'string' : 'strings') + ' unpacked');
+  }
+  parts.push(fmtBytes(r.outBytes) + ' decoded');
+  statusEl.textContent = parts.join('  ·  ');
+}
+
+function render() { renderPipeline(); renderViewer(); }
+
+let timer = 0, runId = 0;
+async function run() {
+  const my = ++runId;
+  const text = input.value;
+  if (!text.trim()) { state.result = null; state.error = null; render(); return; }
+  try {
+    const res = await decodeCode(text);
+    if (my !== runId) return;
+    state.result = res; state.error = null;
+  } catch (e) {
+    if (my !== runId) return;
+    state.result = null;
+    state.error = e instanceof DecodeError ? e : new DecodeError('unknown', 'Something went wrong while decoding: ' + e.message);
+  }
+  render();
+}
+const schedule = () => { clearTimeout(timer); timer = setTimeout(run, 150); };
+
+function currentOutput() {
+  const v = getView();
+  return v ? v.text : '';
+}
+
+let toastTimer = 0;
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 1600);
+}
+
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch (_) {
+    const ta = el('textarea'); ta.value = text; ta.style.cssText = 'position:fixed;opacity:0';
+    document.body.append(ta); ta.select();
+    let ok = false; try { ok = document.execCommand('copy'); } catch (_) {}
+    ta.remove(); return ok;
+  }
+}
+
+/* events */
+input.addEventListener('input', schedule);
+$('#clear').onclick = () => { input.value = ''; run(); input.focus(); };
+$('#example').onclick = () => { input.value = EXAMPLE; run(); };
+$('#paste').onclick = async () => {
+  try { input.value = await navigator.clipboard.readText(); run(); }
+  catch (_) { toast('Clipboard blocked. Press Ctrl+V in the box instead.'); input.focus(); }
 };
+copyBtn.onclick = async () => { toast((await copyText(currentOutput())) ? 'Copied to clipboard' : 'Copy failed'); };
+dlBtn.onclick = () => {
+  const blob = new Blob([currentOutput()], { type: 'application/json' });
+  const a = el('a'); a.href = URL.createObjectURL(blob); a.download = 'character.json';
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+$('#deep').onchange = e => { state.deep = e.target.checked; renderViewer(); };
+document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => { state.view = b.dataset.view; renderViewer(); });
+document.querySelectorAll('[data-indent]').forEach(b => b.onclick = () => {
+  state.indent = Number(b.dataset.indent);
+  document.querySelectorAll('[data-indent]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  renderViewer();
+});
+$('#expand').onclick = () => viewer.querySelectorAll('details').forEach(d => d.open = true);
+$('#collapse').onclick = () => viewer.querySelectorAll('details').forEach((d, i) => d.open = i === 0);
+
+['dragenter', 'dragover'].forEach(ev => input.addEventListener(ev, e => { e.preventDefault(); input.classList.add('drag'); }));
+['dragleave', 'drop'].forEach(ev => input.addEventListener(ev, e => { e.preventDefault(); input.classList.remove('drag'); }));
+input.addEventListener('drop', async e => {
+  const f = e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) { input.value = await f.text(); run(); }
+});
+
+render();
 </script>
+</body>
+</html>
