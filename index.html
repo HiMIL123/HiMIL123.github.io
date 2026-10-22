@@ -1,65 +1,27 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Custom Sound & Tool Hub</title>
-    <!-- Links our custom stylesheet -->
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
+<textarea id="code" rows="6" cols="60" placeholder="Paste character code"></textarea><br>
+<button id="go">Convert</button>
+<pre id="out"></pre>
 
-    <!-- Header Banner -->
-    <header>
-        <h1>Custom Audio Dashboard</h1>
-        <p>Click any button below to play sound assets instantly.</p>
-    </header>
+<script>
+function decodeCharacterCode(code) {
+  // Clean whitespace and convert URL-safe base64 to standard base64
+  let b64 = code.trim().replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/");
+  while (b64.length % 4) b64 += "=";
 
-    <!-- Main Workspace Layout -->
-    <main class="container">
-        
-        <!-- Sidebar Navigation Menu -->
-        <aside class="sidebar">
-            <h3>Menu Panels</h3>
-            <ul>
-                <li><a href="#impacts-section" class="active">💥 Impact Sounds</a></li>
-                <li><a href="#utilities-section">⚙️ Quick Utilities</a></li>
-            </ul>
-        </aside>
+  // atob gives a binary string; decode it as UTF-8 so non-ASCII text survives
+  const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  const text = new TextDecoder("utf-8").decode(bytes);
 
-        <!-- Main Workspace Content Area -->
-        <section class="content">
-            
-            <!-- Dashboard Section: Sound Grid -->
-            <div class="card" id="impacts-section">
-                <h2>Impact Sound Library</h2>
-                <p>Clicking a button streams audio assets from a public library link:</p>
-                
-                <div class="button-grid">
-                    <!-- The playSound function accepts any audio URL as its target -->
-                    <button class="ui-btn" onclick="playSound('https://google.com')">🔊 Slide Whistle</button>
-                    <button class="ui-btn" onclick="playSound('https://google.com')">🔊 Cartoon Pop</button>
-                    <button class="ui-btn" onclick="playSound('https://google.com')">🔊 Watch Alarm</button>
-                    <button class="ui-btn" onclick="playSound('https://google.com')">🔊 Splat Effect</button>
-                </div>
-            </div>
+  return JSON.parse(text);
+}
 
-            <!-- Dashboard Section: Utilities -->
-            <div class="card" id="utilities-section" style="margin-top: 25px;">
-                <h2>Developer Utilities</h2>
-                <div class="button-grid">
-                    <button class="ui-btn utility-btn" onclick="copyToClipboard('https://github.com')">📋 Copy Main Git Link</button>
-                    <button class="ui-btn utility-btn" onclick="alert('System Status: Operational')">🟢 Check Status</button>
-                </div>
-            </div>
-
-        </section>
-    </main>
-
-    <!-- Invisible audio player markup manipulated by Javascript -->
-    <audio id="global-audio-player"></audio>
-
-    <!-- Links our interactive script logic -->
-    <script src="script.js"></script>
-</body>
-</html>
+document.getElementById("go").onclick = () => {
+  const out = document.getElementById("out");
+  try {
+    const obj = decodeCharacterCode(document.getElementById("code").value);
+    out.textContent = JSON.stringify(obj, null, 2); // pretty-printed JSON
+  } catch (e) {
+    out.textContent = "Could not decode: " + e.message;
+  }
+};
+</script>
