@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Custom Sound & Tool Hub</title>
+    <!-- Links our custom stylesheet -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- Header Banner -->
+    <header>
+        <h1>Custom Audio Dashboard</h1>
+        <p>Click any button below to play sound assets instantly.</p>
+    </header>
+
+    <!-- Main Workspace Layout -->
+    <main class="container">
+        
+        <!-- Sidebar Navigation Menu -->
+        <aside class="sidebar">
+            <h3>Menu Panels</h3>
+            <ul>
+                <li><a href="#impacts-section" class="active">💥 Impact Sounds</a></li>
+                <li><a href="#utilities-section">⚙️ Quick Utilities</a></li>
+            </ul>
+        </aside>
+
+        <!-- Main Workspace Content Area -->
+        <section class="content">
+            
+            <!-- Dashboard Section: Sound Grid -->
+            <div class="card" id="impacts-section">
+                <h2>Impact Sound Library</h2>
+                <p>Clicking a button streams audio assets from a public library link:</p>
+                
+                <div class="button-grid">
+                    <!-- The playSound function accepts any audio URL as its target -->
+                    <button class="ui-btn" onclick="playSound('https://google.com')">🔊 Slide Whistle</button>
+                    <button class="ui-btn" onclick="playSound('https://google.com')">🔊 Cartoon Pop</button>
+                    <button class="ui-btn" onclick="playSound('https://google.com')">🔊 Watch Alarm</button>
+                    <button class="ui-btn" onclick="playSound('https://google.com')">🔊 Splat Effect</button>
+                </div>
+            </div>
+
+            <!-- Dashboard Section: Utilities -->
+            <div class="card" id="utilities-section" style="margin-top: 25px;">
+                <h2>Developer Utilities</h2>
+                <div class="button-grid">
+                    <button class="ui-btn utility-btn" onclick="copyToClipboard('https://github.com')">📋 Copy Main Git Link</button>
+                    <button class="ui-btn utility-btn" onclick="alert('System Status: Operational')">🟢 Check Status</button>
+                </div>
+            </div>
+
+        </section>
+    </main>
+
+    <!-- Invisible audio player markup manipulated by Javascript -->
+    <audio id="global-audio-player"></audio>
+
+    <!-- Links our interactive script logic -->
+    <script src="script.js"></script>
+</body>
+</html>
