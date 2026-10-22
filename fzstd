@@ -1,0 +1,31 @@
+<textarea id="code" rows="6" cols="60" placeholder="Paste character code"></textarea><br>
+<button id="go">Convert</button>
+<pre id="out"></pre>
+
+<script src="https://cdn.jsdelivr.net/npm/fzstd@0.1.1/umd/index.js"></script>
+<script>
+function decodeCharacterCode(code) {
+  let b64 = code.trim().replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/");
+  while (b64.length % 4) b64 += "=";
+
+  const compressed = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  const raw = fzstd.decompress(compressed);          // zstd -> bytes
+  const text = new TextDecoder("utf-8").decode(raw); // bytes -> string
+
+  try {
+    return JSON.parse(text);   // if it's JSON
+  } catch {
+    return text;               // otherwise show the raw text so you can inspect it
+  }
+}
+
+document.getElementById("go").onclick = () => {
+  const out = document.getElementById("out");
+  try {
+    const result = decodeCharacterCode(document.getElementById("code").value);
+    out.textContent = typeof result === "string" ? result : JSON.stringify(result, null, 2);
+  } catch (e) {
+    out.textContent = "Could not decode: " + e.message;
+  }
+};
+</script>
